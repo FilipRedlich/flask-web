@@ -11,6 +11,8 @@ salt='4c2@g34'
 
 @app.route('/')
 def home():
+    if 'user' in session:
+        return render_template('home.html', user=session['user'])
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET','POST'])
@@ -31,7 +33,20 @@ def register():
 
 @app.route('/login', methods=['GET','POST'])
 def login():
-    pass
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        if username not in users_db:
+            return render_template('login.html', warning='Invalid username!')
+        
+        if not check_password_hash(users_db[username], password+salt):
+            return render_template('login.html', warning='Invalid password!')
+
+        session['user'] = username
+        return redirect(url_for('home'))
+
+    return render_template('login.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
