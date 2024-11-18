@@ -1,11 +1,25 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.secret_key = 'key'
 
-# Simulating database
-users_db = {}
+# Configure SQLite database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+
+# Initialize database
+db = SQLAlchemy(app)
+
+# User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+
+# Create database tables
+with app.app_context():
+    db.create_all()
 
 salt='4c2@g34'
 
@@ -21,12 +35,16 @@ def register():
         username = request.form['username']
         password = request.form['password']
 
-        if username in users_db:
+        # Check if user already exists
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
             return render_template('register.html', warning='Username already exists!')
 
-        hashed_password = generate_password_hash(password+salt, method='sha256')
-        # Write password to db using username as key
-        users_db[username] = hashed_password
+        hashed_password = generate_password_hash(password+salt)
+        new_user = User(username=username, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+
         return redirect(url_for('login'))
 
     return render_template('register.html')
@@ -37,10 +55,12 @@ def login():
         username = request.form['username']
         password = request.form['password']
 
-        if username not in users_db:
+        # Query the database for the user
+        user = User.query.filter_by(username=username).first()
+        if not user:
             return render_template('login.html', warning='Invalid username!')
         
-        if not check_password_hash(users_db[username], password+salt):
+        if not check_password_hash(user.password, password+salt):
             return render_template('login.html', warning='Invalid password!')
 
         session['user'] = username
